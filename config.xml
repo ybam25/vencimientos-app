@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget id="com.minegocio.vencimientos" version="1.0.0" xmlns="http://w3.org" xmlns:cdv="http://apache.org">
+    <name>Control Vencimientos</name>
+    <description>Alerta de vencimientos para negocio</description>
+    <author email="contacto@minegocio.com" href="https://minegocio.com">Mi Negocio</author>
+    <content src="index.html" />
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+
+    <platform name="android">
+        <preference name="SplashScreen" value="none" />
+        <preference name="SplashScreenDelay" value="0" />
+        <preference name="AndroidPersistentFileLocation" value="Compatibility" />
+
+        <config-file parent="/manifest" target="AndroidManifest.xml" xmlns:android="http://android.com">
+            <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+            <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+            <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+            <uses-permission android:name="android.permission.WAKE_LOCK" />
+        </config-file>
+    </platform>
+
+    <plugin name="cordova-plugin-local-notification" spec="^0.9.0-beta.2" />
+</widget>

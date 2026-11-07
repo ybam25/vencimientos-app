@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de Vencimientos</title>
+  <script src="cordova.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: #f4f6f8;
+      color: #333;
+      margin: 0;
+      padding: 16px;
+    }
+    h1 { text-align: center; color: #1a73e8; font-size: 1.4rem; }
+    .card {
+      background: #fff;
+      padding: 16px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      margin-bottom: 16px;
+    }
+    label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 0.9rem; }
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 14px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+      font-size: 1rem;
+    }
+    button {
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      font-weight: bold;
+    }
+    .item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+    }
+    .alerta { background-color: #fce8e6; border-left: 4px solid #d93025; }
+    .ok { border-left: 4px solid #34a853; }
+    .btn-borrar {
+      width: auto;
+      background-color: #d93025;
+      padding: 8px 12px;
+      margin: 0;
+      font-size: 0.85rem;
+    }
+    small { color: #555; }
+  </style>
+</head>
+<body>
+
+  <h1>📦 Control de Vencimientos</h1>
+
+  <div class="card">
+    <label for="producto">Nombre del producto</label>
+    <input type="text" id="producto" placeholder="Ej: Yogur frutilla">
+
+    <label for="fecha">Fecha de vencimiento</label>
+    <input type="date" id="fecha">
+
+    <button onclick="agregarProducto()">+ Guardar y Programar Alerta</button>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size: 1.1rem; margin-top: 0;">Productos cargados</h2>
+    <div id="lista"></div>
+  </div>
+
+  <script>
+    let productos = JSON.parse(localStorage.getItem('productos')) || [];
+
+    // Se ejecuta cuando Android termina de cargar los motores nativos
+    document.addEventListener('deviceready', function () {
+      if (cordova.plugins && cordova.plugins.notification) {
+        cordova.plugins.notification.local.requestPermission(function (granted) {
+          if (!granted) {
+            alert("Activá los permisos de notificación en Ajustes para recibir alertas.");
+          }
+        });
+      }
+      mostrarProductos();
+    }, false);
+
+    function agregarProducto() {
+      const nombre = document.getElementById('producto').value.trim();
+      const fecha = document.getElementById('fecha').value;
+
+      if (!nombre || !fecha) {
+        alert("Completá el nombre y la fecha.");
+        return;
+      }
+
+      // ID numérico corto requerido por Android para identificar la alarma
+      const id = Math.floor(Math.random() * 1000000);
+      const nuevoProducto = { id, nombre, fecha };
+
+      programarAlarmaNativa(nuevoProducto);
+
+      productos.push(nuevoProducto);
+      guardarYActualizar();
+
+      document.getElementById('producto').value = '';
+      document.getElementById('fecha').value = '';
+    }
+
+    function programarAlarmaNativa(prod) {
+      if (!window.cordova || !cordova.plugins || !cordova.plugins.notification) return;
+
+      const [anio, mes, dia] = prod.fecha.split('-');
+      // Calculamos 2 días antes a las 09:00 AM
+      const fechaAlerta = new Date(anio, mes - 1, dia - 2, 9, 0, 0);
+      const ahora = new Date();
+
+      // Si faltan menos de 2 días para que venza, avisamos en 10 segundos para probar
+      const momentoDisparo = fechaAlerta > ahora ? fechaAlerta : new Date(ahora.getTime() + 10000);
+
+      cordova.plugins.notification.local.schedule({
+        id: prod.id,
+        title: '⚠️ Producto próximo a vencer',
+        text: `${prod.nombre} vence el ${prod.fecha} (faltan 2 días o menos).`,
+        trigger: { at: momentoDisparo },
+        foreground: true,
+        priority: 2,
+        vibrate: true
+      });
+    }
+
+    function borrarProducto(id) {
+      // Cancelamos la alarma en Android si borrás el producto
+      if (window.cordova && cordova.plugins && cordova.plugins.notification) {
+        cordova.plugins.notification.local.cancel(id);
+      }
+      productos = productos.filter(p => p.id !== id);
+      guardarYActualizar();
+    }
+
+    function guardarYActualizar() {
+      productos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+      localStorage.setItem('productos', JSON.stringify(productos));
+      mostrarProductos();
+    }
+
+    function calcularDiasRestantes(fechaStr) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const [anio, mes, dia] = fechaStr.split('-');
+      const vencimiento = new Date(anio, mes - 1, dia);
+      return Math.ceil((vencimiento - hoy) / (1000 * 60 * 60 * 24));
+    }
+
+    function mostrarProductos() {
+      const lista = document.getElementById('lista');
+      lista.innerHTML = '';
+
+      if (productos.length === 0) {
+        lista.innerHTML = '<p style="color:#777;">No hay productos cargados.</p>';
+        return;
+      }
+
+      productos.forEach(p => {
+        const dias = calcularDiasRestantes(p.fecha);
+        const esAlerta = dias <= 2;
+        let textoEstado = '';
+
+        if (dias < 0) textoEstado = `Venció hace ${Math.abs(dias)} día(s)`;
+        else if (dias === 0) textoEstado = '¡Vence HOY!';
+        else if (dias === 1) textoEstado = '¡Vence MAÑANA!';
+        else textoEstado = `Vence en ${dias} días`;
+
+        const div = document.createElement('div');
+        div.className = `item ${esAlerta ? 'alerta' : 'ok'}`;
+        div.innerHTML = `
+          <div>
+            <strong>${p.nombre}</strong><br>
+            <small>Vence: ${p.fecha} — <b>${textoEstado}</b></small>
+          </div>
+          <button class="btn-borrar" onclick="borrarProducto(${p.id})">Eliminar</button>
+        `;
+        lista.appendChild(div);
+      });
+    }
+
+    mostrarProductos();
+  </script>
+</body>
+</html>
